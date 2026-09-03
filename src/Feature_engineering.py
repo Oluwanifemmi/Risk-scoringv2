@@ -8,6 +8,7 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 import logging
 from typing import List, Tuple
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,20 @@ def drop_columns(X: pd.DataFrame, columns_to_drop: List[str]) -> pd.DataFrame:
     """Drop the given columns"""
     return X.drop(columns=columns_to_drop, errors="ignore")
 
-   
+
+
+#Save post-drop, pre-pipeline data for evaluate.py to reuse
+def save_processed_data(X_train, X_test, y_train, y_test, output_dir: str = "data/preprocessed") -> None:
+    """Save post-drop, pre-pipeline train/test data for evaluate.py to reuse."""
+    os.makedirs(output_dir, exist_ok=True)
+
+    X_train.to_csv(f"{output_dir}/X_train.csv", index=False)
+    X_test.to_csv(f"{output_dir}/X_test.csv", index=False)
+    y_train.to_csv(f"{output_dir}/y_train.csv", index=False)
+    y_test.to_csv(f"{output_dir}/y_test.csv", index=False)
+
+    logger.info(f"Saved processed train/test data to {output_dir}")
+
 
 #winzorization for outlier capping 
 def winsorize(X: np.ndarray, lower: float = 0.05, upper: float = 0.95) -> np.ndarray:
@@ -105,6 +119,7 @@ def build_preprocessing_pipeline():
         ("mean_impute", SimpleImputer(missing_values=np.nan, strategy="mean")),
         ("winsorize", NamedWinsorizer()),
     ])
+    mean_miss.set_output(transform="pandas")
 
     most_freq = Pipeline(steps=[
         ("most_frequent_impute", SimpleImputer(missing_values=np.nan, strategy="most_frequent")),

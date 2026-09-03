@@ -1,22 +1,27 @@
 import logging
 import warnings
 from typing import Dict, List
-from Feature_engineering import build_preprocessing_pipeline
+import joblib
 from imblearn.pipeline import Pipeline as imbpipeline
 from imblearn.over_sampling import SMOTE
 from sklearn.preprocessing import StandardScaler
-from xgboost import XGBClassifier
-import warnings
-from sklearn.utils import resample
 from sklearn.model_selection import RandomizedSearchCV
-import joblib
+from sklearn.utils import resample
+from xgboost import XGBClassifier
+from src.preprocessing import data_import, data_split
+from src.Feature_engineering import (
+    build_preprocessing_pipeline,
+    get_low_iv_columns,
+    drop_columns,save_processed_data
+)
 
 logger = logging.getLogger(__name__)
 
+DATA_PATH = "data/application_train.csv"
 MODEL_OUTPUT_PATH = "riskscore.pkl"
 
-#combining the pipeline for the algorithm
-def build_pipeline(scale_pos_weight: float):
+
+def build_pipeline(scale_pos_weight: float) -> imbpipeline:
     """Assemble the full modeling pipeline: preprocessing, SMOTE, scaling, XGBoost."""
     preprocess = build_preprocessing_pipeline()
 
@@ -36,10 +41,8 @@ def build_pipeline(scale_pos_weight: float):
     ])
     return pipe
 
-#hyperparameter tunning
 
-
-def tune_pipeline(X_train, y_train, pipe: imbpipeline):
+def tune_pipeline(X_train, y_train, pipe: imbpipeline) -> imbpipeline:
     """Randomized hyperparameter search over the XGBOOST step."""
     grid: Dict[str, List] = {
         'XGBOOST__learning_rate': [0.01, 0.05, 0.1, 0.3],
@@ -51,7 +54,7 @@ def tune_pipeline(X_train, y_train, pipe: imbpipeline):
     }
 
     warnings.filterwarnings('ignore')
-    X_sample, y_sample = resample(X_train, y_train, n_samples=1000, random_state=42)
+    X_sample, y_sample = resample(X_train, y_train, n_samples=100, random_state=42)
 
     search = RandomizedSearchCV(
         estimator=pipe,
@@ -59,8 +62,8 @@ def tune_pipeline(X_train, y_train, pipe: imbpipeline):
         n_iter=20,
         cv=5,
         n_jobs=-1,
-        random_state=42,)
-    
+        random_state=42,
+    )
     search.fit(X_sample, y_sample)
 
     logger.info(f"Best params: {search.best_params_}")
@@ -68,13 +71,41 @@ def tune_pipeline(X_train, y_train, pipe: imbpipeline):
 
     best_pipe = search.best_estimator_
     best_pipe.set_output(transform="pandas")
-    return best_pipe      
-  
+    return best_pipe
 
-#fitting the model into the algorithm
+
 def fit_and_save(X_train, y_train, pipe: imbpipeline, output_path: str = MODEL_OUTPUT_PATH) -> imbpipeline:
     """Fit the pipeline on training data and persist it to disk."""
     pipe.fit(X_train, y_train)
     joblib.dump(pipe, output_path)
     logger.info(f"Saved fitted pipeline to {output_path}")
     return pipe
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+
+    # 1. Load raw data
+    data = data_import(DATA_PATH)
+
+    # 2. Split
+    X_train, X_test, y_train, y_test = data_split(data)
+
+    # 3. Decide which columns to drop, using ONLY training data
+    columns_to_drop = get_low_iv_columns(X_train, y_train)
+
+    # 4. Apply the SAME drop list to both train and test
+    X_train = drop_columns(X_train, columns_to_drop)
+    X_test = drop_columns(X_test, columns_to_drop)
+
+    #4b saving the processed data for evaluation
+    save_processed_data(X_train, X_test, y_train, y_test)
+
+    # 5. Build the pipeline
+    pipe = build_pipeline(scale_pos_weight=1.0)  #placeholder, see note below
+
+    # 6. (Optional) tune — comment out if you want to skip this for a quick run
+    pipe = tune_pipeline(X_train, y_train, pipe)
+
+    # 7. Fit and save
+    pipe = fit_and_save(X_train, y_train, pipe)
