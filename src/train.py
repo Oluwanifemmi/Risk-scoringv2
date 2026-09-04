@@ -14,6 +14,7 @@ from src.Feature_engineering import (
     get_low_iv_columns,
     drop_columns,save_processed_data
 )
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -74,8 +75,9 @@ def tune_pipeline(X_train, y_train, pipe: imbpipeline) -> imbpipeline:
     return best_pipe
 
 
-def fit_and_save(X_train, y_train, pipe: imbpipeline, output_path: str = MODEL_OUTPUT_PATH) -> imbpipeline:
+def fit_and_save(X_train, y_train, pipe: imbpipeline, output_path: str = MODEL_OUTPUT_PATH):
     """Fit the pipeline on training data and persist it to disk."""
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     pipe.fit(X_train, y_train)
     joblib.dump(pipe, output_path)
     logger.info(f"Saved fitted pipeline to {output_path}")

@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import joblib
 import pandas as pd
-from custom_transformers import NamedWinsorizer, winsorize
+from src.Feature_engineering import build_preprocessing_pipeline
 
 
 import sys
@@ -10,7 +10,7 @@ sys.path.append('/app')
 
 app = FastAPI()
 
-model = joblib.load('creditriskscore.pkl')
+model = joblib.load('model/riskscore.pkl')
 
 
 class creditfeature(BaseModel):
