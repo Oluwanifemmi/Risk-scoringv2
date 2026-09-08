@@ -3,10 +3,20 @@ from pydantic import BaseModel
 import joblib
 import pandas as pd
 from src.Feature_engineering import build_preprocessing_pipeline
+import os
+import logging
 
 
 import sys
 sys.path.append('/app')
+
+
+#loggings folder
+os.makedirs("logs", exist_ok=True)
+logging.basicConfig(
+    filename="logs/predictions.log",
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",)
 
 app = FastAPI()
 
@@ -69,6 +79,10 @@ def predict_probability(data: creditfeature):
     else:
         risk_tier = "High Risk"
 
+    logging.info(
+        "input=%s probability=%.6f predicted_default=%s risk_tier=%s",
+        data.model_dump(), probability, predicted_default, risk_tier)
+    
     return {
         'probability_default': round(probability, 6),
         'predicted_default': predicted_default,
