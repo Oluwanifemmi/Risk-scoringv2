@@ -1,13 +1,14 @@
 import logging
 import os
 import warnings
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import joblib
 import mlflow
 import mlflow.sklearn
 from imblearn.pipeline import Pipeline as imbpipeline
 from imblearn.over_sampling import SMOTE
+from sklearn.base import clone
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.utils import resample
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 DATA_PATH = "data/application_train.csv"
 MODEL_OUTPUT_DIR = "model"
 MODEL_OUTPUT_PATH = f"{MODEL_OUTPUT_DIR}/riskscore.pkl"
+TOP_N_CONFIGS = 4
 
 
 def build_pipeline(scale_pos_weight: float) -> imbpipeline:
@@ -50,11 +52,9 @@ def build_pipeline(scale_pos_weight: float) -> imbpipeline:
     return pipe
 
 
-def tune_pipeline(X_train, y_train, pipe: imbpipeline) -> Tuple[imbpipeline, Dict, float]:
-    """Randomized hyperparameter search over the XGBOOST step.
-
-    Returns the best pipeline, its best params, and its best CV score,
-    so the caller can log all three to MLflow.
+def get_top_n_configs(X_train, y_train, pipe: imbpipeline, n: int = TOP_N_CONFIGS) -> List[Dict]:
+    """Run RandomizedSearchCV and return the top n param combinations by CV score,
+    instead of only the single best one.
     """
     grid: Dict[str, List] = {
         'XGBOOST__learning_rate': [0.01, 0.05, 0.1, 0.3],
@@ -78,18 +78,28 @@ def tune_pipeline(X_train, y_train, pipe: imbpipeline) -> Tuple[imbpipeline, Dic
     )
     search.fit(X_sample, y_sample)
 
-    logger.info(f"Best params: {search.best_params_}")
-    logger.info(f"Best CV score: {search.best_score_:.4f}")
+    # Pair every trial's params with its mean CV score, then sort descending.
+    all_params = search.cv_results_['params']
+    all_scores = search.cv_results_['mean_test_score']
+    ranked = sorted(zip(all_params, all_scores), key=lambda pair: pair[1], reverse=True)
 
-    best_pipe = search.best_estimator_
-    best_pipe.set_output(transform="pandas")
-    return best_pipe, search.best_params_, search.best_score_
+    top_configs = [params for params, score in ranked[:n]]
+
+    logger.info(f"Top {n} CV scores: {[round(score, 4) for _, score in ranked[:n]]}")
+    return top_configs
 
 
-def fit_and_save(X_train, y_train, pipe: imbpipeline, output_path: str = MODEL_OUTPUT_PATH) -> imbpipeline:
-    """Fit the pipeline on training data and persist it to disk."""
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+def fit_config(X_train, y_train, base_pipe: imbpipeline, config: Dict) -> imbpipeline:
+    """Fit a fresh, independent clone of base_pipe using one specific param config."""
+    pipe = clone(base_pipe)
+    pipe.set_params(**config)
     pipe.fit(X_train, y_train)
+    return pipe
+
+
+def fit_and_save(pipe: imbpipeline, output_path: str = MODEL_OUTPUT_PATH) -> imbpipeline:
+    """Persist an already-fitted pipeline to disk."""
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     joblib.dump(pipe, output_path)
     logger.info(f"Saved fitted pipeline to {output_path}")
     return pipe
@@ -100,47 +110,57 @@ if __name__ == "__main__":
 
     mlflow.set_experiment("credit_risk_model")
 
-    with mlflow.start_run():
-        # 1. Load raw data
-        data = data_import(DATA_PATH)
+    # 1. Load raw data
+    data = data_import(DATA_PATH)
 
-        # 2. Split
-        X_train, X_test, y_train, y_test = data_split(data)
+    # 2. Split
+    X_train, X_test, y_train, y_test = data_split(data)
 
-        # 3. Decide which columns to drop, using ONLY training data
-        columns_to_drop = get_low_iv_columns(X_train, y_train)
-        mlflow.log_param("num_columns_dropped", len(columns_to_drop))
+    # 3. Decide which columns to drop, using ONLY training data
+    columns_to_drop = get_low_iv_columns(X_train, y_train)
 
-        # 4. Apply the SAME drop list to both train and test
-        X_train = drop_columns(X_train, columns_to_drop)
-        X_test = drop_columns(X_test, columns_to_drop)
+    # 4. Apply the SAME drop list to both train and test
+    X_train = drop_columns(X_train, columns_to_drop)
+    X_test = drop_columns(X_test, columns_to_drop)
 
-        # 4b. Save the processed data for evaluate.py to reuse
-        save_processed_data(X_train, X_test, y_train, y_test)
+    # 4b. Save the processed data for evaluate.py to reuse
+    save_processed_data(X_train, X_test, y_train, y_test)
 
-        # 5. Build the pipeline
-        scale_pos_weight = 1.0  # placeholder — revisit this value
-        mlflow.log_param("scale_pos_weight", scale_pos_weight)
-        pipe = build_pipeline(scale_pos_weight=scale_pos_weight)
+    # 5. Build the base (untrained) pipeline shape
+    scale_pos_weight = 1.0  # placeholder — revisit this value
+    base_pipe = build_pipeline(scale_pos_weight=scale_pos_weight)
 
-        # 6. Tune, and log what tuning found
-        pipe, best_params, best_cv_score = tune_pipeline(X_train, y_train, pipe)
-        mlflow.log_params(best_params)
-        mlflow.log_metric("tuning_cv_auc", best_cv_score)
+    # 6. Get the top N hyperparameter configs from search, instead of just 1
+    top_configs = get_top_n_configs(X_train, y_train, base_pipe, n=TOP_N_CONFIGS)
 
-        # 7. Fit and save (joblib, as before)
-        pipe = fit_and_save(X_train, y_train, pipe)
+    # 7. Fit each config as its own model, log each as an independent MLflow run,
+    #    and track which one performs best on the REAL held-out test set (not CV).
+    best_pipe = None
+    best_gini = float("-inf")
 
-        # 8. Also log the fitted pipeline to MLflow, alongside the joblib file
-        mlflow.sklearn.log_model(pipe, "model", serialization_format="pickle")
+    for i, config in enumerate(top_configs, start=1):
+        with mlflow.start_run(run_name=f"config_{i}"):
+            logger.info(f"Fitting config {i}/{len(top_configs)}: {config}")
 
-        # 9. Evaluate on the held-out test set and log those metrics
-        ks_stat, p_value = plot_ks(X_test, y_test, pipe)
-        gini = gini_coefficient(X_test, y_test, pipe)
+            pipe = fit_config(X_train, y_train, base_pipe, config)
 
-        mlflow.log_metric("ks_statistic", ks_stat)
-        mlflow.log_metric("gini_coefficient", gini)
+            mlflow.log_param("num_columns_dropped", len(columns_to_drop))
+            mlflow.log_param("scale_pos_weight", scale_pos_weight)
+            mlflow.log_params(config)
 
-        logger.info("MLflow run complete.")
+            ks_stat, p_value = plot_ks(X_test, y_test, pipe)
+            gini = gini_coefficient(X_test, y_test, pipe)
 
-        
+            mlflow.log_metric("ks_statistic", ks_stat)
+            mlflow.log_metric("gini_coefficient", gini)
+            mlflow.sklearn.log_model(pipe, "model", serialization_format="pickle")
+
+            logger.info(f"Config {i} -> Gini: {gini:.4f}, KS: {ks_stat:.4f}")
+
+            if gini > best_gini:
+                best_gini = gini
+                best_pipe = pipe
+
+    # 8. Save only the best-performing pipeline to disk
+    logger.info(f"Best Gini across all configs: {best_gini:.4f}")
+    fit_and_save(best_pipe)

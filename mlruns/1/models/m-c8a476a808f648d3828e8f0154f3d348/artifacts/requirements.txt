@@ -1,0 +1,10 @@
+mlflow==3.16.0
+feature-engine==1.9.4
+imbalanced-learn==0.14.2
+numpy==2.4.6
+pandas==3.0.3
+psutil==7.2.2
+rich==15.0.0
+scikit-learn==1.9.0
+scipy==1.17.1
+xgboost==3.2.0
