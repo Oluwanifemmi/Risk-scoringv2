@@ -1,4 +1,4 @@
 [core]
     remote = myremote
 ['remote "myremote"']
-    url = s3://dvc-s3-user/dvcstore
+    url = s3://credit-risk-abim/dvcstore
