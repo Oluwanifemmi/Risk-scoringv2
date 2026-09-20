@@ -87,29 +87,3 @@ def predict_probability(data: creditfeature):
         'predicted_default': predicted_default,
         'risk_tier': risk_tier
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
