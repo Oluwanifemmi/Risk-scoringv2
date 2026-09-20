@@ -78,7 +78,6 @@ def get_top_n_configs(X_train, y_train, pipe: imbpipeline, n: int = TOP_N_CONFIG
     )
     search.fit(X_sample, y_sample)
 
-    # Pair every trial's params with its mean CV score, then sort descending.
     all_params = search.cv_results_['params']
     all_scores = search.cv_results_['mean_test_score']
     ranked = sorted(zip(all_params, all_scores), key=lambda pair: pair[1], reverse=True)
@@ -105,36 +104,26 @@ def fit_and_save(pipe: imbpipeline, output_path: str = MODEL_OUTPUT_PATH) -> imb
     return pipe
 
 
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-
+def main():
+    """Run the full training pipeline end to end. Callable directly (e.g. from Airflow),
+    not just as a script.
+    """
     mlflow.set_experiment("credit_risk_model")
 
-    # 1. Load raw data
     data = data_import(DATA_PATH)
-
-    # 2. Split
     X_train, X_test, y_train, y_test = data_split(data)
 
-    # 3. Decide which columns to drop, using ONLY training data
     columns_to_drop = get_low_iv_columns(X_train, y_train)
-
-    # 4. Apply the SAME drop list to both train and test
     X_train = drop_columns(X_train, columns_to_drop)
     X_test = drop_columns(X_test, columns_to_drop)
 
-    # 4b. Save the processed data for evaluate.py to reuse
     save_processed_data(X_train, X_test, y_train, y_test)
 
-    # 5. Build the base (untrained) pipeline shape
     scale_pos_weight = 1.0  # placeholder — revisit this value
     base_pipe = build_pipeline(scale_pos_weight=scale_pos_weight)
 
-    # 6. Get the top N hyperparameter configs from search, instead of just 1
     top_configs = get_top_n_configs(X_train, y_train, base_pipe, n=TOP_N_CONFIGS)
 
-    # 7. Fit each config as its own model, log each as an independent MLflow run,
-    #    and track which one performs best on the REAL held-out test set (not CV).
     best_pipe = None
     best_gini = float("-inf")
 
@@ -161,6 +150,12 @@ if __name__ == "__main__":
                 best_gini = gini
                 best_pipe = pipe
 
-    # 8. Save only the best-performing pipeline to disk
     logger.info(f"Best Gini across all configs: {best_gini:.4f}")
     fit_and_save(best_pipe)
+
+    return {"best_gini": best_gini}
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    main()
