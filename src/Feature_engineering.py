@@ -74,8 +74,7 @@ def get_low_iv_columns(
     iv_table = calculate_iv(X, y)
     low_iv_cols = iv_table.loc[iv_table["IV Score"]
                                <= threshold, "Feature"].tolist()
-    logger.info(
-    f"Identified {len(low_iv_cols)} low-IV columns to drop: {low_iv_cols}")
+    logger.info(f"Identified {len(low_iv_cols)} low-IV columns to drop: {low_iv_cols}")
     return low_iv_cols
 
 
