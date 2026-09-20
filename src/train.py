@@ -52,7 +52,8 @@ def build_pipeline(scale_pos_weight: float) -> imbpipeline:
     return pipe
 
 
-def get_top_n_configs(X_train, y_train, pipe: imbpipeline, n: int = TOP_N_CONFIGS) -> List[Dict]:
+def get_top_n_configs(X_train, y_train, pipe: imbpipeline,
+                      n: int = TOP_N_CONFIGS) -> List[Dict]:
     """Run RandomizedSearchCV and return the top n param combinations by CV score,
     instead of only the single best one.
     """
@@ -66,7 +67,8 @@ def get_top_n_configs(X_train, y_train, pipe: imbpipeline, n: int = TOP_N_CONFIG
     }
 
     warnings.filterwarnings('ignore')
-    X_sample, y_sample = resample(X_train, y_train, n_samples=1000, random_state=42)
+    X_sample, y_sample = resample(
+        X_train, y_train, n_samples=1000, random_state=42)
 
     search = RandomizedSearchCV(
         estimator=pipe,
@@ -80,15 +82,18 @@ def get_top_n_configs(X_train, y_train, pipe: imbpipeline, n: int = TOP_N_CONFIG
 
     all_params = search.cv_results_['params']
     all_scores = search.cv_results_['mean_test_score']
-    ranked = sorted(zip(all_params, all_scores), key=lambda pair: pair[1], reverse=True)
+    ranked = sorted(zip(all_params, all_scores),
+                    key=lambda pair: pair[1], reverse=True)
 
     top_configs = [params for params, score in ranked[:n]]
 
-    logger.info(f"Top {n} CV scores: {[round(score, 4) for _, score in ranked[:n]]}")
+    logger.info(
+        f"Top {n} CV scores: {[round(score, 4) for _, score in ranked[:n]]}")
     return top_configs
 
 
-def fit_config(X_train, y_train, base_pipe: imbpipeline, config: Dict) -> imbpipeline:
+def fit_config(X_train, y_train, base_pipe: imbpipeline,
+               config: Dict) -> imbpipeline:
     """Fit a fresh, independent clone of base_pipe using one specific param config."""
     pipe = clone(base_pipe)
     pipe.set_params(**config)
@@ -96,7 +101,8 @@ def fit_config(X_train, y_train, base_pipe: imbpipeline, config: Dict) -> imbpip
     return pipe
 
 
-def fit_and_save(pipe: imbpipeline, output_path: str = MODEL_OUTPUT_PATH) -> imbpipeline:
+def fit_and_save(pipe: imbpipeline,
+                 output_path: str = MODEL_OUTPUT_PATH) -> imbpipeline:
     """Persist an already-fitted pipeline to disk."""
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     joblib.dump(pipe, output_path)
@@ -122,7 +128,8 @@ def main():
     scale_pos_weight = 1.0  # placeholder — revisit this value
     base_pipe = build_pipeline(scale_pos_weight=scale_pos_weight)
 
-    top_configs = get_top_n_configs(X_train, y_train, base_pipe, n=TOP_N_CONFIGS)
+    top_configs = get_top_n_configs(
+        X_train, y_train, base_pipe, n=TOP_N_CONFIGS)
 
     best_pipe = None
     best_gini = float("-inf")
@@ -142,7 +149,8 @@ def main():
 
             mlflow.log_metric("ks_statistic", ks_stat)
             mlflow.log_metric("gini_coefficient", gini)
-            mlflow.sklearn.log_model(pipe, "model", serialization_format="pickle")
+            mlflow.sklearn.log_model(
+                pipe, "model", serialization_format="pickle")
 
             logger.info(f"Config {i} -> Gini: {gini:.4f}, KS: {ks_stat:.4f}")
 
