@@ -35,15 +35,3 @@ jobs:
           python -c "from src.Feature_engineering import build_preprocessing_pipeline, get_low_iv_columns, drop_columns"
           python -c "from src.train import build_pipeline, get_top_n_configs"
           python -c "from src.evaluate import gini_coefficient, plot_ks, cross_validation"
-
-  docker-build:
-    runs-on: ubuntu-latest
-    needs: lint-and-validate
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Build Docker image
-        run: |
-          docker build -t credit-risk-api:${{ github.sha }} .

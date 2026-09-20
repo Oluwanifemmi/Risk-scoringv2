@@ -14,7 +14,8 @@ MODEL_PATH = "model/riskscore.pkl"
 PROCESSED_DATA_DIR = "data/preprocessed"
 
 
-def load_processed_data(data_dir: str = PROCESSED_DATA_DIR) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+def load_processed_data(
+        data_dir: str = PROCESSED_DATA_DIR) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
     """Load the saved post-drop, pre-pipeline train/test data."""
     X_train = pd.read_csv(f"{data_dir}/X_train.csv")
     X_test = pd.read_csv(f"{data_dir}/X_test.csv")
@@ -46,7 +47,8 @@ def gini_coefficient(X_test, y_test, model) -> float:
 def cross_validation(X_train, y_train, model) -> Tuple[np.ndarray, np.ndarray]:
     """Stratified 5-fold CV, reporting both AUC and Gini per fold."""
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    auc_scores = cross_val_score(model, X_train, y_train, cv=cv, scoring='roc_auc')
+    auc_scores = cross_val_score(
+        model, X_train, y_train, cv=cv, scoring='roc_auc')
     gini_scores = 2 * auc_scores - 1
     logger.info(f"CV AUC scores: {auc_scores}")
     logger.info(f"CV Gini scores: {gini_scores}")

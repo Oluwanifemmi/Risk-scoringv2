@@ -1,4 +1,4 @@
-import pandas as pd 
+import pandas as pd
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.pipeline import Pipeline
@@ -12,7 +12,7 @@ import os
 
 logger = logging.getLogger(__name__)
 
-###columns needed for the encoding 
+# columns needed for the encoding
 # Columns needed for imputation / encoding
 MEAN_MISSING_COLS = [
     'AMT_ANNUITY', 'AMT_GOODS_PRICE', 'OWN_CAR_AGE', 'EXT_SOURCE_1',
@@ -26,17 +26,29 @@ MEAN_MISSING_COLS = [
     'REGION_RATING_CLIENT', 'REGION_RATING_CLIENT_W_CITY',
     'REG_CITY_NOT_LIVE_CITY', 'REG_CITY_NOT_WORK_CITY']
 MOST_FREQUENT_COLS = ['OCCUPATION_TYPE']
-ONE_HOT_COLS = ['CODE_GENDER', 'NAME_INCOME_TYPE', 'NAME_EDUCATION_TYPE', 'NAME_FAMILY_STATUS']
+ONE_HOT_COLS = [
+    'CODE_GENDER',
+    'NAME_INCOME_TYPE',
+    'NAME_EDUCATION_TYPE',
+    'NAME_FAMILY_STATUS']
 FREQUENCY_COLS = ['ORGANIZATION_TYPE']
 
 
-
-#preprocess the data with information value to remove the columns with the low iv
-def calculate_iv(X: pd.DataFrame, y: pd.Series, bins: int = 10) -> pd.DataFrame:
+# preprocess the data with information value to remove the columns with
+# the low iv
+def calculate_iv(
+        X: pd.DataFrame,
+        y: pd.Series,
+        bins: int = 10) -> pd.DataFrame:
     def calc(col: str) -> Tuple[float, float]:
         series = X[col]
         if pd.api.types.is_numeric_dtype(series) and series.nunique() > bins:
-            binned = pd.qcut(pd.to_numeric(series, errors="coerce"), bins, duplicates="drop")
+            binned = pd.qcut(
+                pd.to_numeric(
+                    series,
+                    errors="coerce"),
+                bins,
+                duplicates="drop")
         else:
             binned = series
         g = y.groupby(binned, observed=True).agg(
@@ -54,21 +66,32 @@ def calculate_iv(X: pd.DataFrame, y: pd.Series, bins: int = 10) -> pd.DataFrame:
     }).round(4).sort_values("IV Score", ascending=False).reset_index(drop=True)
 
 
-def get_low_iv_columns(X: pd.DataFrame, y: pd.Series, threshold: float = 0.02) -> List[str]:
+def get_low_iv_columns(
+        X: pd.DataFrame,
+        y: pd.Series,
+        threshold: float = 0.02) -> List[str]:
     """Return column names with IV"""
     iv_table = calculate_iv(X, y)
-    low_iv_cols = iv_table.loc[iv_table["IV Score"] <= threshold, "Feature"].tolist()
-    logger.info(f"Identified {len(low_iv_cols)} low-IV columns to drop: {low_iv_cols}")
+    low_iv_cols = iv_table.loc[iv_table["IV Score"]
+                               <= threshold, "Feature"].tolist()
+    logger.info(
+        f"Identified {
+            len(low_iv_cols)} low-IV columns to drop: {low_iv_cols}")
     return low_iv_cols
+
 
 def drop_columns(X: pd.DataFrame, columns_to_drop: List[str]) -> pd.DataFrame:
     """Drop the given columns"""
     return X.drop(columns=columns_to_drop, errors="ignore")
 
 
-
-#Save post-drop, pre-pipeline data for evaluate.py to reuse
-def save_processed_data(X_train, X_test, y_train, y_test, output_dir: str = "data/preprocessed") -> None:
+# Save post-drop, pre-pipeline data for evaluate.py to reuse
+def save_processed_data(
+        X_train,
+        X_test,
+        y_train,
+        y_test,
+        output_dir: str = "data/preprocessed") -> None:
     """Save post-drop, pre-pipeline train/test data for evaluate.py to reuse."""
     os.makedirs(output_dir, exist_ok=True)
 
@@ -80,8 +103,9 @@ def save_processed_data(X_train, X_test, y_train, y_test, output_dir: str = "dat
     logger.info(f"Saved processed train/test data to {output_dir}")
 
 
-#winzorization for outlier capping 
-def winsorize(X: np.ndarray, lower: float = 0.05, upper: float = 0.95) -> np.ndarray:
+# winzorization for outlier capping
+def winsorize(X: np.ndarray, lower: float = 0.05,
+              upper: float = 0.95) -> np.ndarray:
     """Clip values outside IQR-derived bounds computed from the lower/upper percentiles."""
     Q1 = np.percentile(X, lower * 100, axis=0)
     Q3 = np.percentile(X, upper * 100, axis=0)
@@ -110,9 +134,10 @@ class NamedWinsorizer(BaseEstimator, TransformerMixin):
 
     def get_feature_names_out(self, input_features=None) -> np.ndarray:
         return np.array(self.feature_names_)
-    
 
-#encoding the data and filling the missing data which includes column transformer
+
+# encoding the data and filling the missing data which includes column
+# transformer
 def build_preprocessing_pipeline():
     """Build the ColumnTransformer: impute, winsorize numeric, encode categorical."""
     mean_miss = Pipeline(steps=[
@@ -121,18 +146,33 @@ def build_preprocessing_pipeline():
     ])
     mean_miss.set_output(transform="pandas")
 
-    most_freq = Pipeline(steps=[
-        ("most_frequent_impute", SimpleImputer(missing_values=np.nan, strategy="most_frequent")),
-        ("categorical_frequency", CountFrequencyEncoder(encoding_method="count", missing_values="ignore")),
-    ])
+    most_freq = Pipeline(
+        steps=[
+            ("most_frequent_impute",
+             SimpleImputer(
+                 missing_values=np.nan,
+                 strategy="most_frequent")),
+            ("categorical_frequency",
+             CountFrequencyEncoder(
+                 encoding_method="count",
+                 missing_values="ignore")),
+        ])
 
-    freq_encoder = Pipeline(steps=[
-        ("frequency", CountFrequencyEncoder(encoding_method="count", missing_values="ignore")),
-    ])
+    freq_encoder = Pipeline(
+        steps=[
+            ("frequency",
+             CountFrequencyEncoder(
+                 encoding_method="count",
+                 missing_values="ignore")),
+        ])
 
-    onehot_encoder = Pipeline(steps=[
-        ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
-    ])
+    onehot_encoder = Pipeline(
+        steps=[
+            ("onehot",
+             OneHotEncoder(
+                 handle_unknown="ignore",
+                 sparse_output=False)),
+        ])
 
     return ColumnTransformer([
         ("mean_missing", mean_miss, MEAN_MISSING_COLS),
