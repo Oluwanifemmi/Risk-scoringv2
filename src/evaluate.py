@@ -5,7 +5,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from scipy.stats import ks_2samp
-from sklearn.metrics import roc_auc_score, roc_curve
+from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold, cross_val_score
 
 logger = logging.getLogger(__name__)
