@@ -149,14 +149,8 @@ def main():
 
             mlflow.log_metric("ks_statistic", ks_stat)
             mlflow.log_metric("gini_coefficient", gini)
-            mlflow.sklearn.log_model(
-                pipe, "model", serialization_format="pickle")
-            mlflow.sklearn.log_model(
-                                best_pipe,
-                                 "model",
-                                 serialization_format="pickle",
-                                 registered_model_name="credit-risk-model",)
-            
+            mlflow.sklearn.log_model(pipe, "model", serialization_format="pickle")
+
             logger.info(f"Config {i} -> Gini: {gini:.4f}, KS: {ks_stat:.4f}")
 
             if gini > best_gini:
@@ -165,7 +159,11 @@ def main():
 
     logger.info(f"Best Gini across all configs: {best_gini:.4f}")
     fit_and_save(best_pipe)
-
+    mlflow.sklearn.log_model(
+        best_pipe,
+        "model",
+        serialization_format="pickle",
+        registered_model_name="credit-risk-model",)
     return {"best_gini": best_gini}
 
 
