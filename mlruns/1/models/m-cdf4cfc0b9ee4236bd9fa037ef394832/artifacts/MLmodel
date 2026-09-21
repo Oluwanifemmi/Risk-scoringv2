@@ -1,0 +1,23 @@
+artifact_path: file:C:/Users/abimb/Downloads/Customer-lifevalue/mlruns/1/models/m-cdf4cfc0b9ee4236bd9fa037ef394832/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.14.5
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: pickle
+    sklearn_version: 1.9.0
+    skops_trusted_types: null
+mlflow_version: 3.16.0
+model_id: m-cdf4cfc0b9ee4236bd9fa037ef394832
+model_size_bytes: 8484725
+model_uuid: m-cdf4cfc0b9ee4236bd9fa037ef394832
+prompts: null
+run_id: c6b0345c99f449e191d900803528d836
+utc_time_created: '2026-09-21 11:55:37.389949'

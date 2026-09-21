@@ -18,7 +18,7 @@ with DAG(
     dag_id='ml_pipeline',
     default_args=default_args,
     description='Credit Risk Model training and evaluation pipeline',
-    schedule_interval='@daily',
+    schedule='@daily',
     start_date=datetime(2026, 1, 1),
     catchup=False,
 ) as dag:
