@@ -1,0 +1,37 @@
+import sys
+sys.path.append('/mnt/c/Users/abimb/Downloads/Customer-lifevalue')
+
+from datetime import datetime
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+
+from src.train import main as run_training
+from src.evaluate import main as run_evaluation
+
+
+default_args = {
+    'owner': 'nify',
+    'retries': 1,
+}
+
+with DAG(
+    dag_id='ml_pipeline',
+    default_args=default_args,
+    description='Credit Risk Model training and evaluation pipeline',
+    schedule='@daily',
+    start_date=datetime(2026, 1, 1),
+    catchup=False,
+) as dag:
+
+    train_task = PythonOperator(
+        task_id='train_model',
+        python_callable=run_training,
+    )
+
+    evaluate_task = PythonOperator(
+        task_id='evaluate_model',
+        python_callable=run_evaluation,
+    )
+
+    train_task >> evaluate_task
+
