@@ -56,9 +56,6 @@ def cross_validation(X_train, y_train, model) -> Tuple[np.ndarray, np.ndarray]:
 
 
 def main():
-    """Run the full evaluation suite against the saved model and test data.
-    Callable directly (e.g. from Airflow), not just as a script.
-    """
     model = joblib.load(MODEL_PATH)
     X_train, X_test, y_train, y_test = load_processed_data()
 
